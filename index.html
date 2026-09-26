@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="night">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AUTOTHRASH — Adaptive Autonomous Navigation for Unstructured Indian Roads (SIH 2026)</title>
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+
+  <!-- 1. TOP TOOLBAR (Exact 1:1 match to main.py _build_top_toolbar) -->
+  <header class="top-bar">
+    <div class="top-bar-left">
+      <span class="title-lbl">AUTOTHRASH</span>
+      <span class="subtitle-lbl"> | ADAPTIVE NAVIGATION (SIH 2026)</span>
+      <span id="simStatusPill" class="status-pill">SIM RUNNING</span>
+
+      <div class="scen-box">
+        <label class="scen-lbl" for="scenarioSelect">SCENARIO:</label>
+        <select id="scenarioSelect" class="scenario-select" onchange="onScenarioChange(this.value)">
+          <option value="Village Road">Village Road</option>
+          <option value="Urban Intersection">Urban Intersection</option>
+          <option value="Crowded Market Road">Crowded Market Road</option>
+          <option value="Mixed-Traffic Highway">Mixed-Traffic Highway</option>
+          <option value="Sudden Obstacle Event">Sudden Obstacle Event</option>
+        </select>
+      </div>
+
+      <button id="btnTheme" class="btn-theme-toggle" onclick="toggleTheme()">☀️ DAY THEME</button>
+
+      <div class="ctrl-box">
+        <button id="btnPlayPause" class="btn-ctrl" onclick="togglePause()">⏸ PAUSE</button>
+        <button id="btnStep" class="btn-ctrl" onclick="stepOnce()">⏭ STEP</button>
+        <button id="btnReset" class="btn-ctrl" onclick="resetSim()">↺ RESET</button>
+        <button id="btnUnstick" class="btn-ctrl btn-unstick" onclick="manualUnstick()">⚡ UNSTICK</button>
+      </div>
+    </div>
+
+    <!-- Event Injection -->
+    <div class="haz-box">
+      <span class="haz-lbl">EVENT INJECTION:</span>
+      <button class="btn-haz-ped" onclick="triggerPedestrianEvent()">⚡ SUDDEN PEDESTRIAN</button>
+      <button class="btn-haz-obs" onclick="triggerObstacleEvent()">⚠️ OBSTACLE CUT-IN</button>
+      <button id="btnOcclusion" class="btn-haz-occ" onclick="toggleOcclusionEvent()">👁 OCCLUSION</button>
+    </div>
+  </header>
+
+  <!-- 2. MAIN CONTAINER -->
+  <main class="main-container">
+
+    <!-- HORIZONTAL CENTER BAND: [Left Panel] [Large 2.5D Scene] [Right Panel] -->
+    <section class="center-band">
+
+      <!-- LEFT PANEL: Multi-Sensor Perception & Probabilities (PerceptionPanel) -->
+      <aside class="perception-panel">
+        <div class="panel-title">MULTI-SENSOR PERCEPTION</div>
+        <div class="panel-subtitle">SIH Setup: Camera | LiDAR | Radar | IMU</div>
+
+        <!-- Sensor Status & Confidence Grid -->
+        <div class="card">
+          <div class="sensor-row">
+            <span class="sensor-name">Camera</span>
+            <span id="badgeCamera" class="sensor-badge active">ACTIVE</span>
+            <span id="confCamera" class="sensor-conf">0.92</span>
+          </div>
+          <div class="sensor-row">
+            <span class="sensor-name">LiDAR</span>
+            <span id="badgeLidar" class="sensor-badge active">ACTIVE</span>
+            <span id="confLidar" class="sensor-conf">0.95</span>
+          </div>
+          <div class="sensor-row">
+            <span class="sensor-name">Radar</span>
+            <span id="badgeRadar" class="sensor-badge active">ACTIVE</span>
+            <span id="confRadar" class="sensor-conf">0.89</span>
+          </div>
+          <div class="sensor-row" style="margin-bottom: 0;">
+            <span class="sensor-name">IMU</span>
+            <span id="badgeImu" class="sensor-badge active">ACTIVE</span>
+            <span id="confImu" class="sensor-conf">0.98</span>
+          </div>
+        </div>
+
+        <!-- Fused Perception Gauge & Elevated View -->
+        <div class="card">
+          <div class="fused-row">
+            <span style="font-size: 10px; font-weight: 700;">FUSED PERCEPTION</span>
+            <span id="fusedConfVal" class="fused-val">0.90</span>
+          </div>
+          <div id="occlusionBanner" class="occlusion-banner">VIEW: CLEAR LINE-OF-SIGHT</div>
+          <button id="btnElevate" class="btn-elevate" onclick="toggleElevateCamera()">ELEVATE CAMERA VIEW</button>
+        </div>
+
+        <!-- Probabilistic Object Detection Table -->
+        <div class="panel-title" style="margin-top: 4px;">PROBABILISTIC OBJECT DETECTIONS</div>
+        <div class="panel-subtitle">Quantifying P(detection) & motion uncertainty</div>
+
+        <div class="prob-table-wrap">
+          <div class="prob-table-header">
+            <div class="th-class">CLASS</div>
+            <div class="th-dist">DIST</div>
+            <div class="th-pdet">P_DET</div>
+            <div class="th-cmot">C_MOT</div>
+            <div class="th-risk">RISK</div>
+          </div>
+          <div id="probTableRows" class="prob-table-rows"></div>
+        </div>
+      </aside>
+
+      <!-- CENTER HERO: 2.5D Driving Simulation Scene (MainScene25D) -->
+      <section class="scene-container">
+        <canvas id="mainSceneCanvas"></canvas>
+      </section>
+
+      <!-- RIGHT PANEL: Adaptive Path Planning & Feasibility Decision (PlanningPanel) -->
+      <aside class="planning-panel">
+        <div class="panel-title">ADAPTIVE PATH PLANNING</div>
+        <div class="panel-subtitle">Non-Lane Corridors & Dynamic Replanning</div>
+
+        <!-- Road Traversability Corridors -->
+        <div class="card">
+          <div class="card-title-sm">CORRIDOR TRAVERSABILITY</div>
+
+          <div class="corridor-row">
+            <span class="corridor-name">LEFT</span>
+            <div class="corridor-bar-bg"><div id="barLeft" class="corridor-bar-fill" style="width: 75%;"></div></div>
+            <span id="valLeft" class="corridor-val">0.75</span>
+            <span id="badgeLeft" class="corridor-badge feasible">FEASIBLE</span>
+          </div>
+
+          <div class="corridor-row">
+            <span class="corridor-name">CENTER</span>
+            <div class="corridor-bar-bg"><div id="barCenter" class="corridor-bar-fill" style="width: 60%;"></div></div>
+            <span id="valCenter" class="corridor-val">0.60</span>
+            <span id="badgeCenter" class="corridor-badge feasible">FEASIBLE</span>
+          </div>
+
+          <div class="corridor-row" style="margin-bottom: 0;">
+            <span class="corridor-name">RIGHT</span>
+            <div class="corridor-bar-bg"><div id="barRight" class="corridor-bar-fill" style="width: 85%;"></div></div>
+            <span id="valRight" class="corridor-val">0.85</span>
+            <span id="badgeRight" class="corridor-badge feasible">FEASIBLE</span>
+          </div>
+        </div>
+
+        <!-- Candidate Trajectories -->
+        <div class="card">
+          <div class="card-title-sm">CANDIDATE TRAJECTORIES</div>
+
+          <div id="boxRouteA" class="route-box">
+            <div class="route-top">
+              <span style="color: var(--route-a);">ROUTE A</span>
+              <span id="statRouteA" style="font-size: 8px; color: var(--text-muted);">CANDIDATE</span>
+            </div>
+            <div class="route-info">
+              <span id="safetyRouteA" style="color: #16a34a;">Safety: 0.85</span>
+              <span id="riskRouteA" style="color: #dc2626;">Risk: 0.15</span>
+              <span id="clrRouteA">Clr: 2.8m</span>
+            </div>
+          </div>
+
+          <div id="boxRouteB" class="route-box selected">
+            <div class="route-top">
+              <span style="color: var(--route-b);">ROUTE B</span>
+              <span id="statRouteB" style="font-size: 8px; color: var(--status-ok);">SELECTED</span>
+            </div>
+            <div class="route-info">
+              <span id="safetyRouteB" style="color: #16a34a;">Safety: 0.90</span>
+              <span id="riskRouteB" style="color: #dc2626;">Risk: 0.10</span>
+              <span id="clrRouteB">Clr: 3.2m</span>
+            </div>
+          </div>
+
+          <div id="boxRouteC" class="route-box">
+            <div class="route-top">
+              <span style="color: var(--route-c);">ROUTE C</span>
+              <span id="statRouteC" style="font-size: 8px; color: var(--text-muted);">CANDIDATE</span>
+            </div>
+            <div class="route-info">
+              <span id="safetyRouteC" style="color: #16a34a;">Safety: 0.80</span>
+              <span id="riskRouteC" style="color: #dc2626;">Risk: 0.20</span>
+              <span id="clrRouteC">Clr: 2.5m</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Context Evidence: Traffic Behavior -->
+        <div class="card">
+          <div class="card-title-sm">CONTEXT EVIDENCE: TRAFFIC BEHAVIOR</div>
+          <div id="leaderVehLbl" style="font-size: 9px; font-weight: 700;">LEADER: AUTO-RICKSHAW</div>
+          <div id="leaderActLbl" style="font-size: 9px; color: var(--text-secondary);">Navigating narrow corridor gap</div>
+          <div id="feasDecisionBadge" class="occlusion-banner" style="margin-top: 4px;">FEASIBILITY: ALTERNATIVE MANEUVER FEASIBLE</div>
+        </div>
+
+        <!-- Architecture & Dataset Mapping -->
+        <div class="card" style="margin-bottom: 0;">
+          <div style="font-size: 9px; font-weight: 700; color: var(--text-muted);">ARCHITECTURE & DATASET MAPPING</div>
+          <div style="font-size: 8px; color: var(--text-secondary); line-height: 1.4; margin-top: 2px;">
+            Target: MATLAB / Simulink / Automated Driving Toolbox<br>
+            Dataset Support: Synthetic | IDD | Mendeley | RoadRunner
+          </div>
+        </div>
+      </aside>
+
+    </section>
+
+    <!-- BOTTOM HORIZONTAL BAND: [Risk Map BEV] [Telemetry] [Metrics] -->
+    <footer class="bottom-band">
+
+      <!-- Sub-panel 1: Local Top-Down Risk Map (BEV) -->
+      <div class="bottom-card bev-panel">
+        <div class="bev-title-bar">
+          <div class="card-title-sm" style="margin-bottom: 0;">LOCAL TOP-DOWN RISK MAP (BEV)</div>
+          <button id="btnToggleBevSize" class="btn-enlarge-bev" onclick="toggleBevExpanded()">⛶ ENLARGE BEV</button>
+        </div>
+        <div class="bev-canvas-wrap">
+          <canvas id="bevCanvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Sub-panel 2: Vehicle Kinematics & Control (TelemetryPanel) -->
+      <div class="bottom-card telemetry-panel">
+        <div class="card-title-sm" style="margin-bottom: 2px;">VEHICLE STATE & CONTROL</div>
+        <div class="telemetry-content">
+          
+          <div class="telemetry-col-speed">
+            <div id="telSpeedVal" class="speed-val">32.0</div>
+            <div class="speed-unit">SPEED (KM/H)</div>
+            <div id="telModeBadge" class="mode-badge">CRUISE</div>
+          </div>
+
+          <div class="telemetry-col-steer">
+            <canvas id="steerDialCanvas"></canvas>
+            <div id="telSteerText" class="steer-text">STEER: 0.0°</div>
+          </div>
+
+          <div class="telemetry-col-matrix">
+            <div id="telAccel">Accel: +0.0 m/s²</div>
+            <div id="telHeading">Heading: 0.0°</div>
+            <div id="telWaypoint">Waypoint: (0.0, 15.0)</div>
+            <div id="telDist">Dist: 0.0 m</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Sub-panel 3: Engineering Performance Metrics (MetricsPanel) -->
+      <div class="bottom-card metrics-panel">
+        <div class="card-title-sm" style="margin-bottom: 2px;">ENGINEERING PERFORMANCE METRICS</div>
+        <div class="metrics-grid">
+          
+          <div class="metric-row">
+            <span class="metric-name">Completion</span>
+            <div class="metric-val-tag"><span id="mCompletion" class="metric-val">0%</span><span class="metric-tag">[M]</span></div>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">Collision Status</span>
+            <div class="metric-val-tag"><span id="mCollision" class="metric-val" style="color: var(--status-ok);">NONE</span><span class="metric-tag">[M]</span></div>
+          </div>
+
+          <div class="metric-row">
+            <span class="metric-name">Replans Count</span>
+            <div class="metric-val-tag"><span id="mReplans" class="metric-val">0</span><span class="metric-tag">[M]</span></div>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">Replan Latency</span>
+            <div class="metric-val-tag"><span id="mLatency" class="metric-val">14 ms</span><span class="metric-tag">[M]</span></div>
+          </div>
+
+          <div class="metric-row">
+            <span class="metric-name">Min Clearance</span>
+            <div class="metric-val-tag"><span id="mClearance" class="metric-val">2.5 m</span><span class="metric-tag">[M]</span></div>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">Path Smoothness</span>
+            <div class="metric-val-tag"><span id="mSmoothness" class="metric-val">0.92</span><span class="metric-tag">[M]</span></div>
+          </div>
+
+          <div class="metric-row">
+            <span class="metric-name">Cycle Plan Time</span>
+            <div class="metric-val-tag"><span id="mCycleTime" class="metric-val">14 ms</span><span class="metric-tag">[M]</span></div>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">Scenario Mode</span>
+            <div class="metric-val-tag"><span id="mScenarioMode" class="metric-val">Synthetic</span><span class="metric-tag" style="color: #a371f7;">[S]</span></div>
+          </div>
+
+        </div>
+      </div>
+
+    </footer>
+
+  </main>
+
+  <script src="index.js"></script>
+</body>
+</html>
